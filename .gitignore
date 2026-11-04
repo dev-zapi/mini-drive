@@ -2,6 +2,9 @@ storage/*
 !storage/.gitkeep
 recycle/
 lifecycle.json
+target/
 node_modules/
+web/node_modules/
+web/.vite/
 *.log
 .DS_Store

@@ -1,12 +1,13 @@
 {
   "name": "mini-drive",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "零依赖、无认证的简易云盘：给 AI Agent 用的上传/下载 API + 浏览器文件列表页",
+  "description": "零认证简易云盘：Rust 后端 + Svelte 前端，给 AI Agent 用的上传/下载 API",
   "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "start": "cargo run --release",
+    "build": "cargo build --release",
+    "web:install": "cd web && npm install",
+    "web:build": "cd web && npm run build",
+    "web:dev": "cd web && npm run dev"
   }
 }

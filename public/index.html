@@ -1,100 +1,14 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>简易云盘 · 文件列表</title>
-  <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-  <main class="wrap">
-    <header class="head">
-      <div class="brand">
-        <div class="logo" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6.5 19a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 9.2 4.4 4.4 0 0 1 17.5 19h-11Z"/>
-            <path d="M12 15V11m0 0-1.6 1.6M12 11l1.6 1.6"/>
-          </svg>
-        </div>
-        <div>
-          <h1>简易云盘</h1>
-          <p class="sub">无登录 · 上传 / 下载 / 目录浏览</p>
-        </div>
-      </div>
-      <nav class="actions">
-        <button class="btn ghost" id="recycleBtn" type="button">回收站</button>
-        <a class="btn ghost" href="/help" target="_blank">API 使用说明</a>
-        <button class="btn ghost" id="refresh" type="button">刷新</button>
-      </nav>
-    </header>
-
-    <section class="card upload" id="dropzone">
-      <div class="upload-row">
-        <label class="field">
-          <span>上传到目录</span>
-          <input id="targetDir" type="text" placeholder="留空 = 根目录，或填 reports/2026" autocomplete="off">
-        </label>
-        <label class="field ttl-field">
-          <span>过期时间（可选）</span>
-          <input id="expiresInput" type="text" placeholder="留空=不过期，或 2h / 7d" autocomplete="off">
-        </label>
-        <label class="field ttl-field">
-          <span>回收站保留（可选）</span>
-          <input id="recycleInput" type="text" placeholder="留空=默认 7d，或 3d" autocomplete="off">
-        </label>
-        <label class="btn primary file-btn">
-          选择文件
-          <input id="fileInput" type="file" multiple hidden>
-        </label>
-        <button class="btn primary" id="uploadBtn" type="button" disabled>上传</button>
-      </div>
-      <div class="upload-hint">
-        <span id="selectedInfo">未选择文件 · 也可直接把文件拖到这里</span>
-        <span id="uploadInfo" class="result"></span>
-      </div>
-    </section>
-
-    <section class="card list-card" id="listCard">
-      <div class="list-head">
-        <div class="crumbs" id="crumbs"></div>
-        <div class="stats" id="stats"></div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>名称</th><th class="col-size">大小</th><th class="col-time">修改时间</th><th class="col-act"></th></tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
-      <div class="empty" id="empty" hidden>
-        <p>这个目录还是空的</p>
-        <span>用上面的「选择文件」上传，或让 AI Agent 调用 <code>PUT /files/&lt;路径&gt;</code></span>
-      </div>
-      <div class="error" id="error" hidden></div>
-    </section>
-
-    <section class="card list-card" id="recycleCard" hidden>
-      <div class="list-head">
-        <div class="crumbs"><button class="crumb" id="backBtn" type="button">← 返回文件列表</button><span class="sep">/</span><strong>回收站</strong></div>
-        <div class="stats" id="recycleStats"></div>
-      </div>
-      <div class="recycle-note">到期文件会被打成 ZIP 放在这里，超过保留时长后自动删除且不可恢复；需要保留请提前下载。</div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>压缩包</th><th>原文件</th><th class="col-size">大小</th><th class="col-time">到期删除</th><th class="col-act"></th></tr></thead>
-          <tbody id="recycleBody"></tbody>
-        </table>
-      </div>
-      <div class="empty" id="recycleEmpty" hidden><p>回收站是空的</p><span>还没有过期归档的文件</span></div>
-    </section>
-
-    <footer class="foot">
-      <span>Mini Drive · 文件直接存于服务端 <code>storage/</code></span>
-      <span id="lifecycleInfo"></span>
-      <span>给 AI Agent 的接口说明：<a href="/api/help">/api/help</a> · <a href="/llms.txt">/llms.txt</a></span>
-    </footer>
-  </main>
-  <script src="/app.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini Drive · 简易云盘</title>
+    <meta name="description" content="无认证的简易云盘，AI Agent 可通过 REST API 上传和下载文件" />
+    <script type="module" crossorigin src="/assets/index-DEEQdmoP.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-sKJ0DpZU.css">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
 </html>

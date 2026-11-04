@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")" || exit 1
-echo "Starting Mini Drive on http://127.0.0.1:8787/"
-echo "Press Ctrl+C to stop."
-exec node server.js
+echo "Starting Mini Drive (Rust) on http://127.0.0.1:8787/"
+if [ -x "./target/release/mini-drive.exe" ]; then
+  exec ./target/release/mini-drive.exe
+elif [ -x "./target/release/mini-drive" ]; then
+  exec ./target/release/mini-drive
+fi
+command -v cargo >/dev/null 2>&1 || { echo "[ERROR] Rust toolchain not found. Install rustup first."; exit 1; }
+exec cargo run --release

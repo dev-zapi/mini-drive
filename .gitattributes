@@ -1,0 +1,2 @@
+# Shell 脚本必须保持 LF，否则在 Unix 上无法直接执行
+*.sh text eol=lf

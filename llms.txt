@@ -1,4 +1,4 @@
-# 简易云盘 Mini Drive · AI Agent 使用说明（静态版）
+# 简易云盘 Mini Drive · AI Agent 使用说明（静态版，v2: Rust + Svelte）
 
 > 无认证的文件上传/下载服务。默认 Base URL: http://127.0.0.1:8787
 > 服务运行后请优先访问 http://127.0.0.1:8787/llms.txt 或 /api/help —— 会带上实际 host 与端口。
@@ -34,9 +34,9 @@
   curl -T ./tmp.log "http://127.0.0.1:8787/files/temp/tmp.log?expires=2h&recycle=3d"
   curl -H "X-File-Expires: 2h" --data-binary @./a.txt "http://127.0.0.1:8787/api/upload?path=a.txt"
   curl -F "expires=2h" -F "recycle=3d" -F "file=@./a.txt" http://127.0.0.1:8787/api/upload
-未设 expires 且未配 DEFAULT_TTL 的文件永不自动归档。到期 → 打成单个 ZIP（包内保留原目录结构）→ 移入 recycle/ 并删除原文件 → ZIP 超过 RECYCLE_TTL（默认 7d）自动删除。元数据存 lifecycle.json，重启不丢。
+未设 expires 且未配 DEFAULT_TTL 的文件永不自动归档。到期 → 打成单个 ZIP（包内保留原目录结构、UTF-8 文件名）→ 移入 recycle/ 并删除原文件 → ZIP 超过 RECYCLE_TTL（默认 7d）自动删除。元数据存 lifecycle.json，重启不丢。
 查看/触发：GET /api/lifecycle · POST /api/sweep · GET /api/recycle · GET /recycle/<name>.zip
-环境变量：DEFAULT_TTL（默认空）/ RECYCLE_TTL（7d）/ SWEEP_INTERVAL（60s）/ RECYCLE_DIR / META_FILE
+环境变量：DEFAULT_TTL（默认空）/ RECYCLE_TTL（7d）/ SWEEP_INTERVAL（60s）/ RECYCLE_DIR / META_FILE / PUBLIC_DIR
 
 ## 最常用
 上传：  curl -T ./local.txt http://127.0.0.1:8787/files/docs/2026/local.txt
@@ -45,8 +45,8 @@
 下载：  curl -O -J http://127.0.0.1:8787/files/docs/2026/local.txt
 
 ## 响应
-成功上传： {"ok":true,"path":"docs/a.txt","size":123,"download_url":"/files/docs/a.txt","lifecycle":"none","expires_at":null}
-设定过期时：lifecycle="scheduled" + expires_at(ISO) + recycle_ttl_ms
+成功上传： {"ok":true,"path":"docs/a.txt","size":123,"download_url":"/files/docs/a.txt","lifecycle":"none","expires_at":null,"recycle_ttl":null}
+设定过期时：lifecycle="scheduled" + expires_at(ISO) + recycle_ttl(秒)
 列目录：   {"ok":true,"path":"docs","count":2,"items":[{"name":"a.txt","type":"file","path":"docs/a.txt","size":123,"mtime":"..."}]}
 失败：     {"ok":false,"error":"原因"}（HTTP 4xx/5xx）
 
