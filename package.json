@@ -1,0 +1,12 @@
+{
+  "name": "mini-drive",
+  "version": "1.1.0",
+  "private": true,
+  "description": "零依赖、无认证的简易云盘：给 AI Agent 用的上传/下载 API + 浏览器文件列表页",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,7 @@
+storage/*
+!storage/.gitkeep
+recycle/
+lifecycle.json
+node_modules/
+*.log
+.DS_Store

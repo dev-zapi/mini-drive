@@ -1,0 +1,54 @@
+# 简易云盘 Mini Drive · AI Agent 使用说明（静态版）
+
+> 无认证的文件上传/下载服务。默认 Base URL: http://127.0.0.1:8787
+> 服务运行后请优先访问 http://127.0.0.1:8787/llms.txt 或 /api/help —— 会带上实际 host 与端口。
+
+## 规则
+1. 所有 path 都相对服务端 storage/ 根目录，用 / 分隔，支持多级子目录。
+2. 上传时父目录自动创建；同名文件直接覆盖；无版本管理。
+3. 下载一律返回 attachment，不做预览。
+4. 路径禁止 .. 、绝对路径、盘符、隐藏文件（以 . 开头）和 Windows 非法字符。
+5. 无需任何 token / 账号 / 登录；单次请求上限默认 200 MB。
+6. 上传可设 expires / recycle；到期文件打成 ZIP 移入 recycle/，压缩包超期自动删除且不可恢复。
+
+## 接口
+- GET  /api/help                        完整说明（JSON）
+- GET  /llms.txt                        完整说明（纯文本）
+- GET  /help                            HTML 帮助页
+- GET  /api/health                      健康检查
+- GET  /api/list?path=docs&recursive=1  列目录（path 省略为根）
+- GET  /files/<path>                    下载文件（推荐）
+- GET  /api/download?path=docs/a.txt    下载文件（query 形式）
+- PUT  /files/<path>                    上传：请求体 = 文件原始字节（推荐）
+- PUT/POST /api/upload?path=docs/a.txt  上传原始字节，或 X-File-Path 头
+- POST /api/upload                      multipart：file（可多个）+ 可选 path（目标目录）
+- POST /api/mkdir?path=docs/2026        创建空目录
+- GET  /api/lifecycle                   生命周期状态：待归档文件与到期时间
+- GET  /api/recycle                     回收站压缩包列表
+- GET  /recycle/<name>.zip              下载回收站压缩包
+- POST /api/sweep                       立即执行一次生命周期扫描
+- GET  /                                浏览器文件列表页（右上角可切换回收站）
+
+## 文件生命周期（过期归档 → 回收站 → 自动删除）
+上传时设 expires（30s/10m/2h/7d/4w、纯数字秒、ISO 8601 绝对时间），可选 recycle 覆盖回收站保留时长：
+  curl -T ./tmp.log "http://127.0.0.1:8787/files/temp/tmp.log?expires=2h&recycle=3d"
+  curl -H "X-File-Expires: 2h" --data-binary @./a.txt "http://127.0.0.1:8787/api/upload?path=a.txt"
+  curl -F "expires=2h" -F "recycle=3d" -F "file=@./a.txt" http://127.0.0.1:8787/api/upload
+未设 expires 且未配 DEFAULT_TTL 的文件永不自动归档。到期 → 打成单个 ZIP（包内保留原目录结构）→ 移入 recycle/ 并删除原文件 → ZIP 超过 RECYCLE_TTL（默认 7d）自动删除。元数据存 lifecycle.json，重启不丢。
+查看/触发：GET /api/lifecycle · POST /api/sweep · GET /api/recycle · GET /recycle/<name>.zip
+环境变量：DEFAULT_TTL（默认空）/ RECYCLE_TTL（7d）/ SWEEP_INTERVAL（60s）/ RECYCLE_DIR / META_FILE
+
+## 最常用
+上传：  curl -T ./local.txt http://127.0.0.1:8787/files/docs/2026/local.txt
+上传：  curl -F "path=docs/2026" -F "file=@./a.txt" http://127.0.0.1:8787/api/upload
+列全部：curl "http://127.0.0.1:8787/api/list?recursive=1"
+下载：  curl -O -J http://127.0.0.1:8787/files/docs/2026/local.txt
+
+## 响应
+成功上传： {"ok":true,"path":"docs/a.txt","size":123,"download_url":"/files/docs/a.txt","lifecycle":"none","expires_at":null}
+设定过期时：lifecycle="scheduled" + expires_at(ISO) + recycle_ttl_ms
+列目录：   {"ok":true,"path":"docs","count":2,"items":[{"name":"a.txt","type":"file","path":"docs/a.txt","size":123,"mtime":"..."}]}
+失败：     {"ok":false,"error":"原因"}（HTTP 4xx/5xx）
+
+## 给 AI Agent 的指令
+先 GET {BASE_URL}/api/help 或 {BASE_URL}/llms.txt 了解接口；上传用 PUT {BASE_URL}/files/<相对路径>（body 为文件字节），下载用 GET 同一路径；列目录用 GET {BASE_URL}/api/list?recursive=1。无需任何认证信息。
