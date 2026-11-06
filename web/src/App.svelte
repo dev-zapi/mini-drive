@@ -15,6 +15,9 @@
   let dragging = false;
   let uploading = false;
   let fileInput;
+  let copiedPath = '';
+  let manualPrompt = '';
+  let copyTimer;
 
   const encPath = (p) => String(p).split('/').map(encodeURIComponent).join('/');
 
@@ -112,6 +115,81 @@
     setPending(e.dataTransfer.files);
   }
 
+  // 生成一段可直接贴给 AI Agent 的提示词：自带服务地址、说明入口和目标路径
+  function buildPrompt(it) {
+    const base = location.origin;
+    const p = it.path;
+    const enc = encPath(p);
+    const q = encodeURIComponent(p);
+    const head = [
+      '你可以通过我搭建的简易云盘 Mini Drive 访问文件。它不需要任何账号、token 或认证，用普通 HTTP 请求即可。',
+      '',
+      `服务地址：${base}`,
+      `接口说明：先 GET ${base}/llms.txt（纯文本）或 ${base}/api/help（JSON），里面有全部接口、参数与示例。`,
+      '若这个地址连不上，把主机名换成服务所在机器的局域网 IP，端口不变。',
+      '',
+    ];
+    if (it.type === 'dir') {
+      return head.concat([
+        `本次目标：目录「${p}」（目录不能整体下载，需先列出内容再逐个取文件）`,
+        '',
+        `列出该目录： curl "${base}/api/list?path=${q}"`,
+        `递归列出目录内全部文件： curl "${base}/api/list?path=${q}&recursive=1"`,
+        `下载目录内某个文件： GET ${base}/files/<该目录下的相对路径>`,
+        `上传到该目录： curl -T ./a.txt "${base}/files/${enc}/a.txt"`,
+        '',
+        '请先列出该目录，再按我接下来的要求读取其中的文件或上传新文件。',
+      ]).join('\n');
+    }
+    return head.concat([
+      `本次目标：文件「${p}」`,
+      '',
+      `下载： curl -O -J "${base}/files/${enc}"`,
+      `或直接 GET ${base}/files/${enc}（响应为附件，文件名「${it.name}」）`,
+      `查看云盘全部文件： curl "${base}/api/list?recursive=1"`,
+      '',
+      '请读取这个文件，然后按我接下来的要求处理。',
+    ]).join('\n');
+  }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch { /* 落到兜底方案 */ }
+    // 局域网 http:// 不是安全上下文，clipboard API 不可用，用 execCommand 兜底
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  async function share(it) {
+    const text = buildPrompt(it);
+    const ok = await copyText(text);
+    error = '';
+    notice = '';
+    if (ok) {
+      manualPrompt = '';
+      copiedPath = it.path;
+      notice = `已复制「${it.name}」的 AI 提示词，直接粘贴给 Agent 即可。`;
+      clearTimeout(copyTimer);
+      copyTimer = setTimeout(() => { copiedPath = ''; }, 2500);
+    } else {
+      copiedPath = '';
+      manualPrompt = text;
+      error = '浏览器阻止了自动复制，请手动选中下面文本框里的内容复制。';
+    }
+  }
+
   onMount(() => {
     load();
     window.addEventListener('hashchange', load);
@@ -196,6 +274,13 @@
       {#if error}<div class="error">{error}</div>{/if}
       {#if notice}<div class="notice">{notice}</div>{/if}
 
+      {#if manualPrompt}
+        <div class="prompt-fallback">
+          <textarea aria-label="可手动复制的 AI 提示词" readonly value={manualPrompt}></textarea>
+          <button class="btn" on:click={() => { manualPrompt = ''; error = ''; }}>关闭</button>
+        </div>
+      {/if}
+
       {#if items.length === 0 && !loading}
         <div class="empty">这里还没有文件，上传一个试试。</div>
       {:else}
@@ -217,11 +302,19 @@
                 <td class="muted">{fmtTime(it.mtime)}</td>
                 <td class="num muted">{it.type === 'dir' ? '-' : fmtSize(it.size)}</td>
                 <td class="num">
-                  {#if it.type === 'dir'}
-                    <button class="btn" on:click={() => goto(it.path)}>进入</button>
-                  {:else}
-                    <a class="btn" href={'/files/' + encPath(it.path)} download={it.name}>下载</a>
-                  {/if}
+                  <div class="row-actions">
+                    {#if it.type === 'dir'}
+                      <button class="btn" on:click={() => goto(it.path)}>进入</button>
+                    {:else}
+                      <a class="btn" href={'/files/' + encPath(it.path)} download={it.name}>下载</a>
+                    {/if}
+                    <button
+                      class="btn share"
+                      class:copied={copiedPath === it.path}
+                      title="复制一段可直接贴给 AI 的提示词，让它访问这个{it.type === 'dir' ? '目录' : '文件'}"
+                      on:click={() => share(it)}
+                    >{copiedPath === it.path ? '已复制' : '分享'}</button>
+                  </div>
                 </td>
               </tr>
             {/each}

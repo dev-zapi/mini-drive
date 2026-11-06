@@ -82,6 +82,19 @@ footer.foot a { color: var(--accent); }
 
 .tag { display: inline-block; padding: 1px 8px; border-radius: 20px; background: #f0f2f6; color: var(--muted); font-size: 12px; }
 
+.row-actions { display: inline-flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
+.row-actions .btn { padding: 5px 10px; font-size: 13px; border-radius: 6px; }
+.row-actions .btn.share { color: var(--accent); border-color: #c9dcff; background: var(--accent-soft); }
+.row-actions .btn.share:hover { border-color: var(--accent); }
+.row-actions .btn.share.copied { color: var(--ok); border-color: #bfe3c9; background: #eaf7ee; }
+
+.prompt-fallback { margin: 12px 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.prompt-fallback textarea {
+  width: 100%; min-height: 190px; padding: 10px 12px; resize: vertical;
+  border: 1px solid var(--border); border-radius: 8px; background: #fbfcfe; color: var(--text);
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
 @media (max-width: 680px) {
   .upload-grid { grid-template-columns: 1fr; }
   th:nth-child(3), td:nth-child(3) { display: none; }
