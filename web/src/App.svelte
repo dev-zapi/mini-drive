@@ -119,36 +119,21 @@
   function buildPrompt(it) {
     const base = location.origin;
     const p = it.path;
-    const enc = encPath(p);
-    const q = encodeURIComponent(p);
     const head = [
-      '你可以通过我搭建的简易云盘 Mini Drive 访问文件。它不需要任何账号、token 或认证，用普通 HTTP 请求即可。',
-      '',
-      `服务地址：${base}`,
-      `接口说明：先 GET ${base}/llms.txt（纯文本）或 ${base}/api/help（JSON），里面有全部接口、参数与示例。`,
-      '若这个地址连不上，把主机名换成服务所在机器的局域网 IP，端口不变。',
-      '',
+      `Mini Drive 云盘（无需认证）：${base}`,
+      `接口说明：GET ${base}/llms.txt`,
     ];
     if (it.type === 'dir') {
       return head.concat([
-        `本次目标：目录「${p}」（目录不能整体下载，需先列出内容再逐个取文件）`,
-        '',
-        `列出该目录： curl "${base}/api/list?path=${q}"`,
-        `递归列出目录内全部文件： curl "${base}/api/list?path=${q}&recursive=1"`,
-        `下载目录内某个文件： GET ${base}/files/<该目录下的相对路径>`,
-        `上传到该目录： curl -T ./a.txt "${base}/files/${enc}/a.txt"`,
-        '',
-        '请先列出该目录，再按我接下来的要求读取其中的文件或上传新文件。',
+        `目标目录：${p}`,
+        `列出：GET ${base}/api/list?path=${encodeURIComponent(p)}&recursive=1`,
+        '请先列出该目录，再按我的要求处理。',
       ]).join('\n');
     }
     return head.concat([
-      `本次目标：文件「${p}」`,
-      '',
-      `下载： curl -O -J "${base}/files/${enc}"`,
-      `或直接 GET ${base}/files/${enc}（响应为附件，文件名「${it.name}」）`,
-      `查看云盘全部文件： curl "${base}/api/list?recursive=1"`,
-      '',
-      '请读取这个文件，然后按我接下来的要求处理。',
+      `目标文件：${p}`,
+      `下载：GET ${base}/files/${encPath(p)}`,
+      '请读取该文件并按我的要求处理。',
     ]).join('\n');
   }
 
