@@ -135,6 +135,34 @@ cargo 与 npm 均已配置国内镜像（`rsproxy.cn` / `npmmirror.com`），详
 
 ---
 
+## 常驻部署（Windows，无需管理员权限）
+
+把服务装成后台常驻进程：登录自启、异常退出自动重启、无窗口、日志落盘。
+
+```powershell
+# 部署：注册计划任务 MiniDrive 并立即启动
+powershell -ExecutionPolicy Bypass -File deploy\install-task.ps1
+
+# 查看状态：任务 / 进程 / 端口 / 健康检查 / 最近日志
+powershell -ExecutionPolicy Bypass -File deploy\status.ps1
+
+# 卸载：停止并移除计划任务
+powershell -ExecutionPolicy Bypass -File deploy\uninstall-task.ps1
+```
+
+| 文件 | 作用 |
+| --- | --- |
+| `deploy/mini-drive.env` | 常驻服务的配置（`HOST` / `PORT` / TTL 等），改完重启任务生效 |
+| `deploy/run-service.ps1` | 启动器 + 守护循环：进程非 0 退出后按 5s→60s 退避自动重启 |
+| `deploy/install-task.ps1` | 注册计划任务 `MiniDrive`：登录触发、隐藏窗口、单实例 `IgnoreNew` |
+| `deploy/status.ps1` / `deploy/uninstall-task.ps1` | 状态查看 / 停止并清理 |
+
+日志写到 `logs/service.log`，超过 5 MB 自动轮转为 `service.log.1`。实测强杀进程后约 6 秒自动恢复。
+
+计划任务运行在当前用户会话中，**注销后停止、下次登录自动恢复**；若需要「无人登录也常驻」，以管理员身份改用 Windows 服务（`nssm` / `sc create`）即可。
+
+---
+
 ## API 速查
 
 所有 `path` 都是相对 `storage/` 的路径，用 `/` 分隔。
@@ -208,6 +236,8 @@ mini-drive/
 ├── recycle/             # 归档 ZIP（gitignore，自动创建）
 ├── lifecycle.json       # 到期元数据（gitignore）
 ├── llms.txt             # 静态版 Agent 使用说明
+├── deploy/              # 常驻部署：计划任务安装/卸载/状态 + 启动器 + env 配置
+├── logs/                # 常驻服务日志（gitignore，自动创建）
 ├── Cargo.toml / Cargo.lock / package.json
 └── start*.bat / start*.sh   # 仅本机 / 局域网启动脚本
 ```

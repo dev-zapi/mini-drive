@@ -7,4 +7,5 @@ node_modules/
 web/node_modules/
 web/.vite/
 *.log
+logs/
 .DS_Store
