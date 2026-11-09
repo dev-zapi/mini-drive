@@ -5,6 +5,8 @@
   let currentPath = '';
   let items = [];
   let recycleItems = [];
+  let expiryByPath = new Map();
+  let expiryLoaded = false;
   let loading = false;
   let error = '';
   let notice = '';
@@ -35,6 +37,32 @@
     return isNaN(d.getTime()) ? String(s) : d.toLocaleString('zh-CN', { hour12: false });
   }
 
+  // 剩余秒数压成短标签：90 -> 1m，7200 -> 2h，90000 -> 1d 1h
+  function fmtLeft(s) {
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s / 60) + 'm';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+    return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
+  }
+
+  // 过期信息来自 /api/lifecycle 的元数据，按 path 与列表项对齐
+  function expiryInfo(it) {
+    if (it.type === 'dir') return { text: '-' };
+    if (!expiryLoaded) return { tag: '—', title: '过期信息暂不可用' };
+    const info = expiryByPath.get(it.path);
+    if (!info) return { tag: '永久', title: '未设置过期时间，不会自动归档' };
+    const left = Number(info.seconds_left) || 0;
+    const tail = info.recycle_ttl ? '；归档后在回收站保留 ' + fmtLeft(Number(info.recycle_ttl)) : '';
+    const title = '到期归档并移入回收站' + tail;
+    if (left <= 0) return { text: fmtTime(info.expires_at), tag: '已到期', cls: 'due', title: title + '（等待下次扫描）' };
+    return {
+      text: fmtTime(info.expires_at),
+      tag: '剩 ' + fmtLeft(left),
+      cls: left < 600 ? 'soon' : '',
+      title: title,
+    };
+  }
+
   function pathFromHash() {
     const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
     if (raw === '/recycle' || raw.startsWith('/recycle/')) return { view: 'recycle', path: '' };
@@ -59,9 +87,16 @@
       if (view === 'recycle') {
         recycleItems = (await api('/api/recycle')).items || [];
         items = [];
+        expiryByPath = new Map();
+        expiryLoaded = false;
       } else {
-        const data = await api('/api/list?path=' + encodeURIComponent(currentPath));
-        items = data.items || [];
+        const [data, lifecycle] = await Promise.all([
+          api('/api/list?path=' + encodeURIComponent(currentPath)),
+          api('/api/lifecycle').catch(() => null),
+        ]);
+        expiryLoaded = !!lifecycle;
+        expiryByPath = new Map(((lifecycle && lifecycle.pending) || []).map((x) => [x.path, x]));
+        items = (data.items || []).map((it) => ({ ...it, expiry: expiryInfo(it) }));
         recycleItems = [];
       }
     } catch (e) {
@@ -269,9 +304,9 @@
       {#if items.length === 0 && !loading}
         <div class="empty">这里还没有文件，上传一个试试。</div>
       {:else}
-        <table>
+        <table class="files">
           <thead>
-            <tr><th>名称</th><th>类型</th><th>修改时间</th><th style="text-align:right">大小</th><th></th></tr>
+            <tr><th>名称</th><th>类型</th><th>修改时间</th><th>过期时间</th><th style="text-align:right">大小</th><th></th></tr>
           </thead>
           <tbody>
             {#each items as it (it.path)}
@@ -285,6 +320,10 @@
                 </td>
                 <td class="muted">{it.type === 'dir' ? '目录' : '文件'}</td>
                 <td class="muted">{fmtTime(it.mtime)}</td>
+                <td class="expiry muted" title={it.expiry.title || ''}>
+                  {#if it.expiry.text}<span class="abs">{it.expiry.text}</span>{/if}
+                  {#if it.expiry.tag}<span class={'tag ' + (it.expiry.cls || '')}>{it.expiry.tag}</span>{/if}
+                </td>
                 <td class="num muted">{it.type === 'dir' ? '-' : fmtSize(it.size)}</td>
                 <td class="num">
                   <div class="row-actions">

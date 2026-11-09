@@ -81,6 +81,11 @@ footer.foot { margin-top: 22px; display: flex; justify-content: space-between; g
 footer.foot a { color: var(--accent); }
 
 .tag { display: inline-block; padding: 1px 8px; border-radius: 20px; background: #f0f2f6; color: var(--muted); font-size: 12px; }
+.tag.soon { background: #fff4e5; color: #a56500; }
+.tag.due { background: #fdecea; color: var(--danger); }
+
+td.expiry { white-space: nowrap; }
+td.expiry .abs { margin-right: 6px; font-size: 13px; }
 
 .row-actions { display: inline-flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
 .row-actions .btn { padding: 5px 10px; font-size: 13px; border-radius: 6px; }
@@ -97,6 +102,7 @@ footer.foot a { color: var(--accent); }
 
 @media (max-width: 680px) {
   .upload-grid { grid-template-columns: 1fr; }
-  th:nth-child(3), td:nth-child(3) { display: none; }
+  table.files th:nth-child(3), table.files td:nth-child(3) { display: none; }
+  table.files .expiry .abs { display: none; }
   .wrap { padding: 18px 12px 40px; }
 }
