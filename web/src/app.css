@@ -92,6 +92,8 @@ td.expiry .abs { margin-right: 6px; font-size: 13px; }
 .row-actions .btn.share { color: var(--accent); border-color: #c9dcff; background: var(--accent-soft); }
 .row-actions .btn.share:hover { border-color: var(--accent); }
 .row-actions .btn.share.copied { color: var(--ok); border-color: #bfe3c9; background: #eaf7ee; }
+.row-actions .btn.danger { color: var(--danger); border-color: #f3cdc8; background: #fff8f7; }
+.row-actions .btn.danger:hover { border-color: var(--danger); background: #fdecea; }
 
 .prompt-fallback { margin: 12px 0; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .prompt-fallback textarea {
@@ -103,6 +105,6 @@ td.expiry .abs { margin-right: 6px; font-size: 13px; }
 @media (max-width: 680px) {
   .upload-grid { grid-template-columns: 1fr; }
   table.files th:nth-child(3), table.files td:nth-child(3) { display: none; }
-  table.files .expiry .abs { display: none; }
+  table.files .expiry .abs, table.recycle .expiry .abs { display: none; }
   .wrap { padding: 18px 12px 40px; }
 }

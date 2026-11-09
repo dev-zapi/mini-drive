@@ -45,6 +45,16 @@
     return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
   }
 
+  // 回收站压缩包的过期时间：到期后 ZIP 会被自动删除
+  function recycleExpiry(it) {
+    const left = Number(it.seconds_left) || 0;
+    return {
+      text: fmtTime(it.expires_at),
+      tag: left <= 0 ? '已到期' : '剩 ' + fmtLeft(left),
+      cls: left <= 0 ? 'due' : left < 600 ? 'soon' : '',
+    };
+  }
+
   // 过期信息来自 /api/lifecycle 的元数据，按 path 与列表项对齐
   function expiryInfo(it) {
     if (it.type === 'dir') return { text: '-' };
@@ -85,7 +95,8 @@
     error = '';
     try {
       if (view === 'recycle') {
-        recycleItems = (await api('/api/recycle')).items || [];
+        recycleItems = ((await api('/api/recycle')).items || [])
+          .map((it) => ({ ...it, expiry: recycleExpiry(it) }));
         items = [];
         expiryByPath = new Map();
         expiryLoaded = false;
@@ -207,6 +218,48 @@
       copiedPath = '';
       manualPrompt = text;
       error = '浏览器阻止了自动复制，请手动选中下面文本框里的内容复制。';
+    }
+  }
+
+  // 删除 = 归档进回收站，原文件不可直接访问，但仍可从压缩包恢复
+  async function removeItem(it) {
+    const isDir = it.type === 'dir';
+    const what = isDir ? `目录「${it.name}」及其中全部文件` : `文件「${it.name}」`;
+    const msg = `确定删除${what}吗？\n\n`
+      + '删除后内容会打包成 ZIP 移入回收站，原位置不再可访问。\n'
+      + '可在回收站下载恢复，也可彻底删除；超过保留时间后会自动清除。';
+    if (!window.confirm(msg)) return;
+    try {
+      const r = await api('/files/' + encPath(it.path), { method: 'DELETE' });
+      error = '';
+      notice = `已把「${it.name}」移入回收站（归档包含 ${r.file_count} 个文件）。`;
+      const parent = currentPath.split('/').slice(0, -1).join('/');
+      await load();
+      // 删掉最后一个文件后空目录会被服务端清理，此时退回上一级
+      if (error === '目录不存在' && currentPath) {
+        location.hash = '#/' + parent;
+        await load();
+      }
+    } catch (e) {
+      error = '删除失败：' + e.message;
+      notice = '';
+    }
+  }
+
+  // 彻底删除 = 立即删除回收站里的 ZIP 与元数据，不可恢复
+  async function purgeArchive(it) {
+    const msg = `确定彻底删除压缩包「${it.name}」吗？\n\n`
+      + `对应原文件：${it.source}\n`
+      + 'ZIP 文件与记录会被立即永久删除，无法恢复。';
+    if (!window.confirm(msg)) return;
+    try {
+      await api('/recycle/' + encodeURIComponent(it.name), { method: 'DELETE' });
+      error = '';
+      notice = `已彻底删除「${it.name}」。`;
+      await load();
+    } catch (e) {
+      error = '彻底删除失败：' + e.message;
+      notice = '';
     }
   }
 
@@ -338,6 +391,11 @@
                       title="复制一段可直接贴给 AI 的提示词，让它访问这个{it.type === 'dir' ? '目录' : '文件'}"
                       on:click={() => share(it)}
                     >{copiedPath === it.path ? '已复制' : '分享'}</button>
+                    <button
+                      class="btn danger"
+                      title="删除后打包进回收站，可在回收站恢复或彻底删除"
+                      on:click={() => removeItem(it)}
+                    >删除</button>
                   </div>
                 </td>
               </tr>
@@ -359,18 +417,26 @@
       {#if recycleItems.length === 0 && !loading}
         <div class="empty">回收站是空的。</div>
       {:else}
-        <table>
+        <table class="recycle">
           <thead>
-            <tr><th>压缩包</th><th>原文件</th><th>到期时间</th><th style="text-align:right">大小</th><th></th></tr>
+            <tr><th>压缩包</th><th>原文件</th><th>过期时间</th><th style="text-align:right">大小</th><th></th></tr>
           </thead>
           <tbody>
             {#each recycleItems as it (it.name)}
               <tr>
                 <td class="name"><span class="icon">🗜️</span>{it.name}</td>
                 <td class="muted">{it.source}</td>
-                <td class="muted">{fmtTime(it.expires_at)} <span class="tag">剩 {it.seconds_left}s</span></td>
+                <td class="expiry muted" title="到期后压缩包会被自动删除，无法恢复">
+                  <span class="abs">{it.expiry.text}</span>
+                  <span class={'tag ' + it.expiry.cls}>{it.expiry.tag}</span>
+                </td>
                 <td class="num muted">{fmtSize(it.size)}</td>
-                <td class="num"><a class="btn" href={'/recycle/' + encodeURIComponent(it.name)} download={it.name}>下载</a></td>
+                <td class="num">
+                  <div class="row-actions">
+                    <a class="btn" href={'/recycle/' + encodeURIComponent(it.name)} download={it.name}>下载</a>
+                    <button class="btn danger" title="永久删除该压缩包，不可恢复" on:click={() => purgeArchive(it)}>彻底删除</button>
+                  </div>
+                </td>
               </tr>
             {/each}
           </tbody>

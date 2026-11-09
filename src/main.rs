@@ -446,8 +446,13 @@ fn dispatch(state: &State, info: &ReqInfo) -> Result<Resp> {
         return mkdir(state, path);
     }
 
-    // ---- 上传 ----
+    // ---- 上传 / 删除 ----
     if let Some(raw) = p.strip_prefix("/files/") {
+        if m == "DELETE" {
+            let rel = util::decode_rel(raw)?;
+            let mut meta = state.meta.lock().unwrap();
+            return Ok(Resp::ok(lifecycle::delete_to_recycle(&state.cfg, &mut meta, &rel)?));
+        }
         if m == "PUT" {
             let rel = util::decode_rel(raw)?;
             let exp = q("expires").or_else(|| header(&info.headers, "x-file-expires"));
@@ -472,8 +477,14 @@ fn dispatch(state: &State, info: &ReqInfo) -> Result<Resp> {
         return Ok(Resp::ok(saved));
     }
 
-    // ---- 回收站归档包 ----
+    // ---- 回收站归档包（下载 / 彻底删除）----
     if let Some(name) = p.strip_prefix("/recycle/") {
+        if m == "DELETE" {
+            let decoded = urlencoding::decode(name)
+                .map_err(|_| HttpError::bad("文件名编码无效"))?.into_owned();
+            let mut meta = state.meta.lock().unwrap();
+            return Ok(Resp::ok(lifecycle::purge_archive_now(&state.cfg, &mut meta, &decoded)?));
+        }
         if m == "GET" || m == "HEAD" {
             return download_archive(state, name, m == "HEAD");
         }

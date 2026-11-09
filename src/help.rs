@@ -12,6 +12,7 @@ fn endpoints() -> Vec<(&'static str, &'static str, &'static str)> {
         ("GET", "/api/health", "健康检查"),
         ("PUT", "/files/<相对路径>", "上传：请求体 = 文件原始字节，父目录自动创建，同名覆盖"),
         ("GET", "/files/<相对路径>", "下载文件"),
+        ("DELETE", "/files/<相对路径>", "删除：打包成 ZIP 移入回收站并删除原文件/目录，可从回收站恢复"),
         ("GET", "/api/download?path=docs/a.txt", "下载文件（query 形式）"),
         ("HEAD", "/files/<相对路径>", "只取响应头"),
         ("POST", "/api/upload?path=<相对路径>", "上传原始字节；也可用 X-File-Path 头指定路径"),
@@ -20,8 +21,9 @@ fn endpoints() -> Vec<(&'static str, &'static str, &'static str)> {
         ("POST", "/api/mkdir?path=docs/2026", "创建空目录（上传会自动建目录）"),
         ("GET", "/api/lifecycle", "待归档文件及到期时间、当前配置"),
         ("POST", "/api/sweep", "立即执行一次生命周期扫描"),
-        ("GET", "/api/recycle", "回收站中的 ZIP 归档包列表"),
+        ("GET", "/api/recycle", "回收站中的 ZIP 归档包列表（含到期时间）"),
         ("GET", "/recycle/<name>.zip", "下载归档包"),
+        ("DELETE", "/recycle/<name>.zip", "彻底删除归档包：立即删除 ZIP 与记录，不可恢复"),
         ("GET", "/", "浏览器文件列表页"),
     ]
 }
@@ -48,7 +50,7 @@ pub fn help_json(base: &str, cfg: &Config) -> serde_json::Value {
             "formats": "相对时长 30s/10m/2h/7d/4w、纯数字秒，或 ISO 8601 绝对时间",
         },
         "lifecycle": {
-            "summary": "上传时可设置过期时间；到期后文件被打包成 ZIP 移入回收站并从原位置删除；回收站中的 ZIP 超过保留时间后自动删除。",
+            "summary": "上传时可设置过期时间；到期后文件被打包成 ZIP 移入回收站并从原位置删除；也可 DELETE /files/<路径> 立即删除并归档（可恢复）；回收站中的 ZIP 超过保留时间后自动删除，或 DELETE /recycle/<name>.zip 立即彻底删除（不可恢复）。",
             "defaults": {
                 "default_ttl": default_ttl,
                 "recycle_ttl": format!("{}s", cfg.recycle_ttl_ms / 1000),
@@ -63,7 +65,8 @@ pub fn help_json(base: &str, cfg: &Config) -> serde_json::Value {
                 format!("# multipart 多文件\ncurl -F \"path=docs/2026\" -F \"file=@./a.txt\" -F \"file=@./b.txt\" {}/api/upload", base),
                 format!("# 列出全部文件\ncurl \"{}/api/list?recursive=1\"", base),
                 format!("# 下载\ncurl -O -J \"{}/files/reports/2026/report.pdf\"", base),
-                format!("# 查看回收站 / 立即扫描\ncurl \"{}/api/recycle\" ; curl -X POST \"{}/api/sweep\"", base, base),
+                format!("# 删除（原文件打包进回收站，可下载恢复）\ncurl -X DELETE \"{}/files/docs/a.txt\"", base),
+                format!("# 查看回收站 / 彻底删除某个压缩包 / 立即扫描\ncurl \"{}/api/recycle\" ; curl -X DELETE \"{}/recycle/<name>.zip\" ; curl -X POST \"{}/api/sweep\"", base, base, base),
             ],
             "python": [
                 "import urllib.request",
@@ -77,13 +80,15 @@ pub fn help_json(base: &str, cfg: &Config) -> serde_json::Value {
         "response_shapes": {
             "upload": "{\"ok\":true,\"path\":\"docs/a.txt\",\"size\":123,\"download_url\":\"/files/docs/a.txt\",\"lifecycle\":\"scheduled\",\"expires_at\":\"...\"}",
             "list": "{\"ok\":true,\"path\":\"docs\",\"count\":2,\"items\":[{\"name\":\"a.txt\",\"type\":\"file\",\"path\":\"docs/a.txt\",\"size\":123,\"mtime\":\"...\"}]}",
+            "delete": "{\"ok\":true,\"path\":\"docs/a.txt\",\"kind\":\"file\",\"file_count\":1,\"archive\":\"20261109-...-a.txt-1a2b3c4d.zip\",\"size\":321,\"expires_at\":\"...\",\"download_url\":\"/recycle/20261109-...-a.txt-1a2b3c4d.zip\"}",
+            "purge": "{\"ok\":true,\"deleted\":\"20261109-...-a.txt-1a2b3c4d.zip\"}",
             "error": "{\"ok\":false,\"error\":\"...\"}",
         },
         "agent_hint": format!("你是文件存取助手。先 GET {}/api/help 或 {}/llms.txt 了解接口；上传用 PUT {}/files/<相对路径>（body 为文件字节，可加 ?expires=2h&recycle=3d），下载用 GET 同一路径；列目录用 GET {}/api/list?recursive=1；回收站用 GET {}/api/recycle。无需任何认证信息。", base, base, base, base, base),
         "notes": [
             format!("无认证；单次请求体积上限 {} MB。", cfg.max_bytes / 1024 / 1024),
             "路径中的中文、空格需按 URL 规则编码；目录层级用 / 分隔。",
-            "同名文件直接覆盖；归档会删除原文件，回收站到期会删除压缩包且不可恢复。",
+            "同名文件直接覆盖；DELETE /files/<路径> 会把内容归档进回收站（可下载恢复），DELETE /recycle/<name>.zip 与回收站到期清除均不可恢复。",
             "服务默认只监听 127.0.0.1；无认证，请勿直接暴露公网，必要时置于内网并加反向代理鉴权。",
         ],
     })
@@ -104,16 +109,21 @@ pub fn llms_txt(base: &str, cfg: &Config) -> String {
     s.push_str("下载：\n");
     s.push_str(&format!("  curl -O -J \"{}/files/docs/a.txt\"\n", base));
     s.push_str("列出全部文件：\n");
-    s.push_str(&format!("  curl \"{}/api/list?recursive=1\"\n\n", base));
+    s.push_str(&format!("  curl \"{}/api/list?recursive=1\"\n", base));
+    s.push_str("删除（原文件打包进回收站，可下载恢复）：\n");
+    s.push_str(&format!("  curl -X DELETE \"{}/files/docs/a.txt\"\n", base));
+    s.push_str("彻底删除回收站压缩包（不可恢复）：\n");
+    s.push_str(&format!("  curl -X DELETE \"{}/recycle/<name>.zip\"\n\n", base));
     s.push_str("## 文件生命周期\n");
     s.push_str("上传时可设过期时间；到期后文件打成 ZIP 移入回收站并从 storage/ 删除；\n");
-    s.push_str("回收站里的 ZIP 超过保留时间后自动删除（不可恢复）。\n");
+    s.push_str("也可 DELETE /files/<路径>（文件或整个目录）立即归档，效果相同且可恢复。\n");
+    s.push_str("回收站里的 ZIP 超过保留时间后自动删除，或 DELETE /recycle/<name>.zip 立即彻底删除（均不可恢复）。\n");
     s.push_str("设时间的方式（相对 30s/10m/2h/7d/4w、纯数字秒、ISO 绝对时间）：\n");
     s.push_str("  ?expires=2h&recycle=3d\n  X-File-Expires: 2h / X-File-Recycle: 3d\n  multipart 字段 expires / recycle\n");
     s.push_str(&format!("全局默认：DEFAULT_TTL={}，RECYCLE_TTL={}s，扫描间隔 {}ms。\n",
         cfg.default_ttl_ms.map(|v| format!("{}s", v / 1000)).unwrap_or_else(|| "未设置".into()),
         cfg.recycle_ttl_ms / 1000, cfg.sweep_ms));
-    s.push_str("相关接口：GET /api/lifecycle、GET /api/recycle、GET /recycle/<name>.zip、POST /api/sweep\n\n");
+    s.push_str("相关接口：GET /api/lifecycle、GET /api/recycle、GET/DELETE /recycle/<name>.zip、DELETE /files/<路径>、POST /api/sweep\n\n");
     s.push_str("## 响应示例\n");
     s.push_str("成功上传： {\"ok\":true,\"path\":\"docs/a.txt\",\"size\":123,\"download_url\":\"/files/docs/a.txt\",\"lifecycle\":\"scheduled\",\"expires_at\":\"...\"}\n");
     s.push_str("列目录：   {\"ok\":true,\"path\":\"docs\",\"count\":2,\"items\":[{\"name\":\"a.txt\",\"type\":\"file\",\"path\":\"docs/a.txt\",\"size\":123,\"mtime\":\"...\"}]}\n");
@@ -122,7 +132,7 @@ pub fn llms_txt(base: &str, cfg: &Config) -> String {
     s.push_str(&format!("1. 完整 JSON 说明见 {}/api/help，网页版见 {}/help。\n", base, base));
     s.push_str("2. 无需任何认证；路径中的中文/空格需 URL 编码。\n");
     s.push_str(&format!("3. 单次请求上限 {} MB；同名文件直接覆盖。\n", cfg.max_bytes / 1024 / 1024));
-    s.push_str("4. 归档会删除原文件，回收站到期会删除压缩包，重要文件请提前下载。\n");
+    s.push_str("4. 归档会删除原文件但可从回收站下载恢复；彻底删除或回收站到期清除后不可恢复，重要文件请提前下载。\n");
     s.push_str("5. 服务默认只监听本机；无认证，勿直接暴露公网。\n");
     s
 }
