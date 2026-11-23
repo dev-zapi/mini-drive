@@ -16,10 +16,12 @@
   let recycleTtl = '';
   let dragging = false;
   let uploading = false;
+  let pasteFlash = false;
   let fileInput;
   let copiedPath = '';
   let manualPrompt = '';
   let copyTimer;
+  let pasteTimer;
 
   const encPath = (p) => String(p).split('/').map(encodeURIComponent).join('/');
 
@@ -127,33 +129,88 @@
     notice = '';
   }
 
-  async function upload() {
-    if (!pendingFiles.length) { error = '请先选择要上传的文件'; return; }
+  // 选择文件、拖拽、粘贴三条入口最终都走这里：逐个 PUT 原始字节
+  async function uploadFiles(files, dir, label) {
     uploading = true;
     error = '';
     notice = '';
-    const dir = targetDir.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
     const q = new URLSearchParams();
     if (expires.trim()) q.set('expires', expires.trim());
     if (recycleTtl.trim()) q.set('recycle', recycleTtl.trim());
     const qs = q.toString() ? '?' + q.toString() : '';
     let ok = 0;
     const failed = [];
-    for (const f of pendingFiles) {
-      const rel = (dir ? dir + '/' : '') + f.name;
+    for (const f of files) {
+      const name = safeName(f);
+      const rel = (dir ? dir + '/' : '') + name;
       try {
         await api('/files/' + encPath(rel) + qs, { method: 'PUT', body: f });
         ok++;
       } catch (e) {
-        failed.push(f.name + ': ' + e.message);
+        failed.push(name + ': ' + e.message);
       }
     }
     uploading = false;
-    if (ok) notice = '已上传 ' + ok + ' 个文件' + (qs ? '（已设置时间参数）' : '') + '。';
+    if (ok) {
+      notice = label + ' ' + ok + ' 个文件到「' + (dir || '根目录') + '」'
+        + (qs ? '（已设置时间参数）' : '') + '。';
+      if (view === 'recycle') notice += ' 切换到「文件列表」即可看到。';
+    }
     if (failed.length) error = failed.join('；');
+    await load();
+  }
+
+  function targetPath() {
+    // 上传框里显式填了目录就听它的，否则跟随当前浏览的目录
+    return (targetDir.trim() || currentPath || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  }
+
+  function upload() {
+    if (!pendingFiles.length) { error = '请先选择要上传的文件'; return; }
+    if (uploading) { error = '正在上传，请稍候'; return; }
+    const files = pendingFiles;
     pendingFiles = [];
     if (fileInput) fileInput.value = '';
-    await load();
+    uploadFiles(files, targetPath(), '已上传');
+  }
+
+  // 剪贴板里的截图 / 复制的文件常常没有文件名，按 MIME 补一个带时间戳的名字
+  function safeName(f) {
+    const raw = (f.name || '').trim();
+    if (raw) return raw.replace(/[\\/]/g, '_');
+    const ext = ((f.type || '').split(';')[0].split('/')[1] || '').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'bin';
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `粘贴文件-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
+  }
+
+  function filesFromClipboard(cd) {
+    const out = [];
+    if (cd.files) for (const f of cd.files) if (f) out.push(f);
+    // 少数浏览器只把文件放在 items 里
+    if (!out.length && cd.items) {
+      for (const it of cd.items) {
+        if (it.kind === 'file') {
+          const f = it.getAsFile();
+          if (f) out.push(f);
+        }
+      }
+    }
+    return out;
+  }
+
+  // 页面任意位置 Ctrl+V：有文件就直接上传，纯文本完全不干预（输入框照常粘贴）
+  function onPaste(e) {
+    const cd = e.clipboardData;
+    if (!cd) return;
+    const files = filesFromClipboard(cd);
+    if (!files.length) return;
+    e.preventDefault();
+    if (uploading) { error = '正在上传，请稍候再粘贴'; return; }
+    pasteFlash = true;
+    clearTimeout(pasteTimer);
+    pasteTimer = setTimeout(() => { pasteFlash = false; }, 1600);
+    uploadFiles(files, targetPath(), '已粘贴上传');
   }
 
   function onDrop(e) {
@@ -274,6 +331,8 @@
     : [];
 </script>
 
+<svelte:window on:paste={onPaste} />
+
 <div class="wrap">
   <header class="top">
     <div>
@@ -310,11 +369,13 @@
         aria-label="文件拖拽上传区域"
         class="dropzone"
         class:over={dragging}
+        class:pasted={pasteFlash}
         on:dragover|preventDefault={() => (dragging = true)}
         on:dragleave|preventDefault={() => (dragging = false)}
         on:drop|preventDefault={onDrop}
       >
-        把文件拖到这里，或<strong>点击下面按钮选择多个文件</strong>
+        把文件拖到这里、<strong>点击下面按钮选择多个文件</strong>，或在页面任意位置直接
+        <strong>Ctrl+V 粘贴文件 / 截图</strong>（自动上传到当前目录）
       </div>
       <label class="btn primary file-btn">
         选择文件

@@ -52,6 +52,8 @@ header.top p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
   text-align: center; color: var(--muted); font-size: 14px; transition: all .15s;
 }
 .dropzone.over { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.dropzone.pasted { border-color: var(--ok); background: #eaf7ee; color: var(--ok); }
+.dropzone.pasted strong { color: var(--ok); }
 .dropzone strong { color: var(--text); }
 .file-btn { margin-top: 10px; }
 .pending { margin-top: 10px; font-size: 13px; color: var(--muted); }
